@@ -13,6 +13,9 @@
                 <li><a href="about_us.php">About Us</a></li>
                 <li><a href="contact.php">Contact</a></li>
                 <li><a href="myreservations.php">My Reservations</a></li>
+                <?php if (isset($_SESSION['role_name']) && $_SESSION['role_name'] === 'admin'): ?>
+                    <li><a href="admin_panel.php">Admin Panel</a></li>
+                <?php endif; ?>
             </ul>
         </div>
 

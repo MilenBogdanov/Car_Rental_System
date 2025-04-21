@@ -28,17 +28,20 @@
                 <li><a href="about_us.php">About Us</a></li>
                 <li><a href="contact.php">Contact</a></li>
                 <li><a href="myreservations.php">My Reservations</a></li>
+            <?php if (isset($_SESSION['role_name']) && $_SESSION['role_name'] === 'admin'): ?>
+                <li><a href="admin_panel.php">Admin Panel</a></li>
+            <?php endif; ?>
             </ul>
             <div class="auth-buttons">
                 <?php if (isset($_SESSION['user_id'])): ?>
-                    <span class="welcome-message">
-                        Welcome, <?= htmlspecialchars($_SESSION['username']) ?>
-                    </span>
-                    <a href="logout.php" class="btn login-btn">Logout</a>
-                <?php else: ?>
-                    <a href="login.php" class="btn login-btn">Login</a>
-                    <a href="register.php" class="btn register-btn">Register</a>
-                <?php endif; ?>
+                <span class="welcome-message">
+                Welcome, <?= htmlspecialchars($_SESSION['username']) ?>
+                </span>
+                <a href="logout.php" class="btn login-btn">Logout</a>
+            <?php else: ?>
+                <a href="login.php" class="btn login-btn">Login</a>
+                <a href="register.php" class="btn register-btn">Register</a>
+            <?php endif; ?>
             </div>
         </nav>
     </div>

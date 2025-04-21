@@ -6,31 +6,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $username = trim($_POST["username"]);
     $password = $_POST["password"];
 
-    $sql = "SELECT user_id, password, role_id FROM users WHERE username = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $username);
+    $sql = "SELECT users.user_id, users.password, users.role_id, roles.role_name 
+        FROM users 
+        JOIN roles ON users.role_id = roles.role_id 
+        WHERE users.username = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("s", $username);
 
-    if ($stmt->execute()) {
-        $stmt->store_result();
+if ($stmt->execute()) {
+    $stmt->store_result();
 
-        if ($stmt->num_rows === 1) {
-            $stmt->bind_result($user_id, $hashed_password, $role_id);
-            $stmt->fetch();
+    if ($stmt->num_rows === 1) {
+        $stmt->bind_result($user_id, $hashed_password, $role_id, $role_name);
+        $stmt->fetch();
 
-            if (password_verify($password, $hashed_password)) {
-                $_SESSION["user_id"] = $user_id;
-                $_SESSION["username"] = $username;
-                $_SESSION["role_id"] = $role_id;
+        if (password_verify($password, $hashed_password)) {
+            $_SESSION["user_id"] = $user_id;
+            $_SESSION["username"] = $username;
+            $_SESSION["role_id"] = $role_id;
+            $_SESSION["role_name"] = $role_name;
 
-                header("Location: index.php");
-                exit;
-            } else {
-                $error = "Invalid password.";
-            }
+            header("Location: index.php");
+            exit;
         } else {
-            $error = "User not found.";
+            $error = "Invalid password.";
         }
+    } else {
+        $error = "User not found.";
     }
+}
 
     $stmt->close();
 }
