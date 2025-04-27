@@ -256,7 +256,7 @@ document.addEventListener("DOMContentLoaded", function () {
             +359 87 625 1510
         </div>
         <div class="contact-buttons">
-            <a href="viber://chat?number=+359887435500">Message on Viber</a>
+            <a href="viber://chat?number=+359876251510">Message on Viber</a>
             <a href="https://www.facebook.com/profile.php?id=100013392637031">Message on Facebook</a>
             <a href="https://mail.google.com/mail/?to=milenb53@gmail.com&subject=Delivery%20to&body=Hello%2C%0A%0AYour%20message%20here." target="_blank">Send an Email</a>
         </div>
