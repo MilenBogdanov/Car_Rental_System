@@ -6,35 +6,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $username = trim($_POST["username"]);
     $password = $_POST["password"];
 
-    $sql = "SELECT users.user_id, users.password, users.role_id, roles.role_name 
-        FROM users 
-        JOIN roles ON users.role_id = roles.role_id 
-        WHERE users.username = ?";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("s", $username);
+    $sql = "SELECT users.user_id, users.password, users.email, users.role_id, roles.role_name 
+            FROM users 
+            JOIN roles ON users.role_id = roles.role_id 
+            WHERE users.username = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("s", $username);
 
 if ($stmt->execute()) {
-    $stmt->store_result();
+        $stmt->store_result();
 
-    if ($stmt->num_rows === 1) {
-        $stmt->bind_result($user_id, $hashed_password, $role_id, $role_name);
-        $stmt->fetch();
+        if ($stmt->num_rows === 1) {
+            $stmt->bind_result($user_id, $hashed_password, $email, $role_id, $role_name);
+            $stmt->fetch();
 
-        if (password_verify($password, $hashed_password)) {
-            $_SESSION["user_id"] = $user_id;
-            $_SESSION["username"] = $username;
-            $_SESSION["role_id"] = $role_id;
-            $_SESSION["role_name"] = $role_name;
+            if (password_verify($password, $hashed_password)) {
+                
+                $_SESSION["user_id"] = $user_id;
+                $_SESSION["username"] = $username;
+                $_SESSION["user_email"] = $email;  
+                $_SESSION["role_id"] = $role_id;
+                $_SESSION["role_name"] = $role_name;
 
-            header("Location: index.php");
-            exit;
+           
+                header("Location: index.php");
+                exit;
+            } else {
+                $error = "Invalid password.";
+            }
         } else {
-            $error = "Invalid password.";
+            $error = "User not found.";
         }
-    } else {
-        $error = "User not found.";
     }
-}
 
     $stmt->close();
 }

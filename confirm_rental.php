@@ -1,20 +1,42 @@
 <?php
 include 'includes/header.php';
 
+function getUserEmailFromSession() {
+    if (isset($_SESSION['user_email'])) {
+        return $_SESSION['user_email'];
+    } else {
+        return null;
+    }
+}
+
+if (!isset($_SESSION['user_id'])) {
+    echo "<p>You need to be logged in to confirm the rental.</p>";
+    include 'includes/footer.php';
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $car_id = $_POST['car_id'];
     $pickup_date = $_POST['pickup_date'];
     $return_date = $_POST['return_date'];
     $pickup_time = $_POST['pickup_time'];
     $dropoff_time = $_POST['dropoff_time'];
-    $customer_name = $_POST['customer_name'];
-    $customer_email = $_POST['customer_email'];
     $pickup_location = $_POST['pickup_location'];
+
+    $customer_email = getUserEmailFromSession();
+
+    if ($customer_email === null) {
+        echo "<p>Error: User email is missing. Please log in again.</p>";
+        include 'includes/footer.php';
+        exit;
+    }
+
 } else {
     echo "<p>Invalid access.</p>";
     include 'includes/footer.php';
     exit;
 }
+
 ?>
 
 <section class="payment-section">
@@ -38,7 +60,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </select>
             </div>
 
-            
             <div id="credit-card-fields" style="display: none;">
                 <div class="form-group">
                     <label for="card_name">Cardholder Name:</label>
@@ -58,7 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </div>
 
-            
             <div id="cash-note" style="display: none; color: #27ae60; margin-bottom: 20px;">
                 <p>You have selected <strong>cash</strong>. Please be prepared to pay at the pickup location.</p>
             </div>
@@ -86,6 +106,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     });
 </script>
+
+<?php include 'includes/footer.php'; ?> 
+
+<script>
+    const paymentSelect = document.getElementById('payment_method');
+    const cardFields = document.getElementById('credit-card-fields');
+    const cashNote = document.getElementById('cash-note');
+
+    paymentSelect.addEventListener('change', function () {
+        if (this.value === 'credit_card') {
+            cardFields.style.display = 'block';
+            cashNote.style.display = 'none';
+        } else if (this.value === 'cash') {
+            cardFields.style.display = 'none';
+            cashNote.style.display = 'block';
+        } else {
+            cardFields.style.display = 'none';
+            cashNote.style.display = 'none';
+        }
+    });
+</script>
+
+<?php include 'includes/footer.php'; ?> 
+
 
 <style>
 .payment-section {

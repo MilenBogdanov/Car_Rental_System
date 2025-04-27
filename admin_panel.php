@@ -27,18 +27,13 @@ $types = fetchOptions($conn, 'types', 'type_id', 'type_name');
 $gearboxes = fetchOptions($conn, 'gearboxes', 'gearbox_id', 'gearbox_name');
 $statuses = fetchOptions($conn, 'car_status', 'car_status_id', 'car_status_name');
 
-
-$car_list_result = $conn->query("
-    SELECT c.car_id, b.brand_name, m.model_name, c.year_manufacture 
-    FROM cars c
-    JOIN models m ON c.model_id = m.model_id
-    JOIN brands b ON m.brand_id = b.brand_id
-");
-
+$car_list_result = $conn->query("CALL GetCarList()");
 $cars_for_deletion = [];
 while ($row = $car_list_result->fetch_assoc()) {
     $cars_for_deletion[] = $row;
 }
+$car_list_result->free();
+$conn->next_result();
 
 
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['brand_name'])) {
@@ -56,8 +51,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['brand_name'])) {
     $image_name = basename($_FILES['car_image']['name']);
     $target_file = $upload_dir . uniqid() . '_' . $image_name;
 
-    $image_url = '';
-
     if (move_uploaded_file($_FILES['car_image']['tmp_name'], $target_file)) {
         $image_url = $target_file;
     } else {
@@ -69,40 +62,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['brand_name'])) {
             $error_message = "Invalid year format!";
         } else {
             $brand_stmt = $conn->prepare("SELECT brand_id FROM brands WHERE brand_name = ?");
-$brand_stmt->bind_param("s", $brand_name);
-$brand_stmt->execute();
-$brand_result = $brand_stmt->get_result();
+            $brand_stmt->bind_param("s", $brand_name);
+            $brand_stmt->execute();
+            $brand_result = $brand_stmt->get_result();
 
-if ($brand_result->num_rows > 0) {
-    $row = $brand_result->fetch_assoc();
-    $brand_id = $row['brand_id'];
-} else {
-    $insert_brand = $conn->prepare("INSERT INTO brands (brand_name) VALUES (?)");
-    $insert_brand->bind_param("s", $brand_name);
-    $insert_brand->execute();
-    $brand_id = $insert_brand->insert_id;
-    $insert_brand->close();
-}
-$brand_stmt->close();
+            if ($brand_result->num_rows > 0) {
+                $row = $brand_result->fetch_assoc();
+                $brand_id = $row['brand_id'];
+            } else {
+                $insert_brand = $conn->prepare("INSERT INTO brands (brand_name) VALUES (?)");
+                $insert_brand->bind_param("s", $brand_name);
+                $insert_brand->execute();
+                $brand_id = $insert_brand->insert_id;
+                $insert_brand->close();
+            }
+            $brand_stmt->close();
 
             $model_stmt = $conn->prepare("SELECT model_id FROM models WHERE model_name = ? AND brand_id = ?");
-$model_stmt->bind_param("si", $model_name, $brand_id);
-$model_stmt->execute();
-$model_result = $model_stmt->get_result();
+            $model_stmt->bind_param("si", $model_name, $brand_id);
+            $model_stmt->execute();
+            $model_result = $model_stmt->get_result();
 
-if ($model_result->num_rows > 0) {
-    $row = $model_result->fetch_assoc();
-    $model_id = $row['model_id'];
-} else {
-    $insert_model = $conn->prepare("INSERT INTO models (model_name, brand_id) VALUES (?, ?)");
-    $insert_model->bind_param("si", $model_name, $brand_id);
-    $insert_model->execute();
-    $model_id = $insert_model->insert_id;
-    $insert_model->close();
-}
-$model_stmt->close();
+            if ($model_result->num_rows > 0) {
+                $row = $model_result->fetch_assoc();
+                $model_id = $row['model_id'];
+            } else {
+                $insert_model = $conn->prepare("INSERT INTO models (model_name, brand_id) VALUES (?, ?)");
+                $insert_model->bind_param("si", $model_name, $brand_id);
+                $insert_model->execute();
+                $model_id = $insert_model->insert_id;
+                $insert_model->close();
+            }
+            $model_stmt->close();
 
-            
             $stmt = $conn->prepare("INSERT INTO cars (model_id, color_id, type_id, gearbox_id, year_manufacture, mileage, price_per_day, car_status_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
             $stmt->bind_param("iiiisidis", $model_id, $color_id, $type_id, $gearbox_id, $year, $mileage, $price, $status_id, $image_url);
 
@@ -111,39 +103,48 @@ $model_stmt->close();
             } else {
                 $error_message = "Error: " . $stmt->error;
             }
-
             $stmt->close();
         }
     }
 }
 
+
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['delete_car_id'])) {
     $delete_car_id = intval($_POST['delete_car_id']);
 
-    
     $image_stmt = $conn->prepare("SELECT image_url FROM cars WHERE car_id = ?");
+    if ($image_stmt === false) {
+        die('Prepare failed: ' . htmlspecialchars($conn->error));
+    }
     $image_stmt->bind_param("i", $delete_car_id);
     $image_stmt->execute();
     $image_stmt->bind_result($image_url);
     $image_stmt->fetch();
     $image_stmt->close();
 
-    
-    if (!empty($image_url) && file_exists($image_url)) {
-        unlink($image_url);
-    }
-
-    
     $delete_stmt = $conn->prepare("DELETE FROM cars WHERE car_id = ?");
     $delete_stmt->bind_param("i", $delete_car_id);
 
     if ($delete_stmt->execute()) {
-        $success_message = "Car and image deleted successfully!";
+        if (!empty($image_url) && file_exists($image_url)) {
+            unlink($image_url);
+        }
+        $success_message = "Car deleted successfully!";
     } else {
         $error_message = "Deletion failed: " . $delete_stmt->error;
     }
-
     $delete_stmt->close();
+
+    // Refresh cars for deletion
+    $car_list_result = $conn->query("CALL GetCarList()");
+    $cars_for_deletion = [];
+    if ($car_list_result) {
+        while ($row = $car_list_result->fetch_assoc()) {
+            $cars_for_deletion[] = $row;
+        }
+        $car_list_result->free();
+        $conn->next_result();
+    }
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_car'])) {
@@ -151,8 +152,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_car'])) {
     $mileage = intval($_POST['mileage']);
     $year = intval($_POST['year_manufacture']);
     $price = floatval($_POST['price_per_day']);
+    $status_id = intval($_POST['car_status_id']);
 
-    $update_query = "UPDATE cars SET mileage = $mileage, year_manufacture = $year, price_per_day = $price";
+    $update_query = "UPDATE cars SET mileage = ?, year_manufacture = ?, price_per_day = ?, car_status_id = ?";
 
     if (!empty($_FILES['car_image']['name'])) {
         $upload_dir = 'images/';
@@ -160,19 +162,30 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_car'])) {
         $target_file = $upload_dir . uniqid() . '_' . $image_name;
 
         if (move_uploaded_file($_FILES['car_image']['tmp_name'], $target_file)) {
-            $update_query .= ", image_url = '$target_file'";
+            $update_query .= ", image_url = ?";
         }
     }
 
-    $update_query .= " WHERE car_id = $car_id";
+    $update_query .= " WHERE car_id = ?";
 
-    if ($conn->query($update_query)) {
+    $stmt = $conn->prepare($update_query);
+
+    if (!empty($_FILES['car_image']['name'])) {
+        $stmt->bind_param("iiisi", $mileage, $year, $price, $status_id, $target_file, $car_id);
+    } else {
+        $stmt->bind_param("iiisi", $mileage, $year, $price, $status_id, $car_id);
+    }
+
+    if ($stmt->execute()) {
         echo "<div class='success'>Car updated successfully.</div>";
     } else {
-        echo "<div class='error'>Error updating car: " . htmlspecialchars($conn->error) . "</div>";
+        echo "<div class='error'>Error updating car: " . htmlspecialchars($stmt->error) . "</div>";
     }
+
+    $stmt->close();
 }
 ?>
+
 
 <div class="admin-panels-wrapper">
     
@@ -273,10 +286,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_car'])) {
                         <option value="">Select a car</option>
                         <?php foreach ($cars_for_deletion as $car): ?>
                             <option value="<?= $car['car_id'] ?>"
-                                    data-brand="<?= htmlspecialchars($car['brand_name']) ?>"
-                                    data-model="<?= htmlspecialchars($car['model_name']) ?>"
-                                    data-year="<?= $car['year_manufacture'] ?>"
-                                    data-image="<?= $car['image_url'] ?>">
+                                data-brand="<?= htmlspecialchars($car['brand_name']) ?>"
+                                data-model="<?= htmlspecialchars($car['model_name']) ?>"
+                                data-year="<?= $car['year_manufacture'] ?>">
                                 <?= htmlspecialchars("{$car['brand_name']} {$car['model_name']} ({$car['year_manufacture']})") ?>
                             </option>
                         <?php endforeach; ?>
@@ -310,44 +322,69 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['update_car'])) {
     <?php
     if (isset($_POST['selected_car_id'])) {
         $selected_car_id = intval($_POST['selected_car_id']);
-        $car_query = $conn->query("SELECT * FROM cars WHERE car_id = $selected_car_id");
-        $car_data = $car_query->fetch_assoc();
 
-        if ($car_data):
+        $stmt = $conn->prepare("
+            SELECT mileage, year_manufacture, price_per_day, image_url, car_status_id
+            FROM cars 
+            WHERE car_id = ?
+        ");
+        $stmt->bind_param("i", $selected_car_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $car = $result->fetch_assoc();
+        $stmt->close();
+
+        if ($car):
     ?>
-    <form method="POST" enctype="multipart/form-data" class="admin-form" style="margin-top: 20px;">
+
+    <form method="POST" enctype="multipart/form-data" class="admin-form">
         <input type="hidden" name="update_car_id" value="<?= $selected_car_id ?>">
+        <br>
 
-        <div class="form-grid">
-            <div class="form-group">
-                <label>Mileage (km):</label>
-                <input type="number" name="mileage" value="<?= $car_data['mileage'] ?>" min="0" required>
-            </div>
+        <div class="form-group">
+            <label>Mileage (km):</label>
+            <input type="number" name="mileage" value="<?= htmlspecialchars($car['mileage']) ?>" required>
+        </div>
+        <br>
 
-            <div class="form-group">
-                <label>Year of Manufacture:</label>
-                <input type="number" name="year_manufacture" value="<?= $car_data['year_manufacture'] ?>" min="1900" max="2099" required>
-            </div>
+        <div class="form-group">
+            <label>Year of Manufacture:</label>
+            <input type="number" name="year_manufacture" value="<?= htmlspecialchars($car['year_manufacture']) ?>" min="1900" max="2099" required>
+        </div>
+        <br>
 
-            <div class="form-group full-width">
-                <label>Price per Day ($):</label>
-                <input type="number" step="0.01" name="price_per_day" value="<?= $car_data['price_per_day'] ?>" min="0" required>
-            </div>
+        <div class="form-group">
+            <label>Price per Day ($):</label>
+            <input type="number" name="price_per_day" value="<?= htmlspecialchars($car['price_per_day']) ?>" step="0.01" required>
+        </div>
+        <br>
 
-            <div class="form-group full-width">
-                <label>Upload New Car Image (optional):</label>
-                <input type="file" name="car_image" accept="image/*">
-            </div>
+        <div class="form-group">
+            <label for="car_status_id">Car Status:</label>
+            <select id="car_status_id" name="car_status_id" required>
+                <option value="1" <?= ($car['car_status_id'] == 1) ? 'selected' : '' ?>>Budget</option>
+                <option value="2" <?= ($car['car_status_id'] == 2) ? 'selected' : '' ?>>Standard</option>
+                <option value="3" <?= ($car['car_status_id'] == 3) ? 'selected' : '' ?>>VIP</option>
+                <option value="4" <?= ($car['car_status_id'] == 4) ? 'selected' : '' ?>>Luxury</option>
+            </select>
+        </div>
+        <br>
 
-            <div class="form-group full-width">
-                <button type="submit" name="update_car" class="btn-submit">Update Car</button>
-            </div>
+        <div class="form-group full-width">
+            <label>Change Car Image (optional):</label>
+            <input type="file" name="car_image" accept="image/*">
+        </div>
+        <br>
+
+        <div class="form-group full-width">
+            <button type="submit" name="update_car" class="btn-submit">Update Car</button>
         </div>
     </form>
+
     <?php
         endif;
     }
-    ?>
+?>
 </div>
 
 </div>

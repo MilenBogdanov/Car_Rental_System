@@ -103,17 +103,6 @@ while ($rental = $result_rentals->fetch_assoc()) {
     <label for="dropoff_time">Dropoff Time:</label>
     <input type="time" name="dropoff_time" id="dropoff_time" required>
 </div>
-
-            <div class="form-group">
-                <label for="customer_name">Your Name:</label>
-                <input type="text" name="customer_name" required>
-            </div>
-
-            <div class="form-group">
-                <label for="customer_email">Email:</label>
-                <input type="email" name="customer_email" required>
-            </div>
-
             <div class="form-group">
                 <label for="pickup_location">Pickup Location:</label>
                 <input type="text" name="pickup_location" required>
@@ -192,7 +181,7 @@ while ($rental = $result_rentals->fetch_assoc()) {
             days = Math.max(1, days);
             const total = days * pricePerDay;
 
-            totalDisplay.textContent = `Total Price: ${total.toFixed(2)} BGN for ${days} day(s)`;
+            totalDisplay.textContent = Total Price: ${total.toFixed(2)} BGN for ${days} day(s);
         } else {
             totalDisplay.textContent = '';
         }

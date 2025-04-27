@@ -2,6 +2,14 @@
 include 'includes/header.php';
 include 'includes/db_connect.php';
 
+if (session_status() == PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit;
+}
 
 $pickup_date = isset($_GET['pickup_date']) ? $_GET['pickup_date'] : '';
 $pickup_time = isset($_GET['pickup_time']) ? $_GET['pickup_time'] : '';

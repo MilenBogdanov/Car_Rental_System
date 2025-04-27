@@ -50,7 +50,17 @@
                     }
                     ?>
                 </select>
-
+                
+                <select name="car_status_id">
+    <option value="">Any Status</option>
+    <?php
+    $statuses = $conn->query("SELECT car_status_id, car_status_name FROM car_status ORDER BY car_status_name");
+    while ($status = $statuses->fetch_assoc()) {
+        echo "<option value='{$status['car_status_id']}'>{$status['car_status_name']}</option>";
+    }
+    ?>
+</select>
+                
                 <input type="number" name="year_from" placeholder="Year From" min="1990" max="2025">
                 <input type="number" name="year_to" placeholder="Year To" min="1990" max="2025">
                 <input type="number" name="mileage_max" placeholder="Max Mileage (km)">
@@ -79,43 +89,48 @@ Clear Filters</button>
 
         <div class="cars-grid">
             <?php
-            // Използване на процедурата за извличане на всички коли
-            $result = $conn->query("CALL GetAllCars()");
+// Get the selected car status from the filter form (if any)
+$car_status_id = isset($_POST['car_status_id']) ? (int)$_POST['car_status_id'] : NULL;
 
-            if ($result && $result->num_rows > 0) {
-                while ($car = $result->fetch_assoc()) {
-                    echo "<div class='car'>
-                        <img src='{$car['image_url']}' alt='{$car['brand_name']} {$car['model_name']}'>
-                        <div class='car-content' style='display: flex; justify-content: space-between; align-items: center; padding: 15px;'>
-                            <div class='car-info-left'>
-                                <h3>{$car['brand_name']} {$car['model_name']}</h3>
-                                <p><strong>Gearbox:</strong> {$car['gearbox_name']}</p>
-                                <p><strong>Year:</strong> {$car['year_manufacture']}</p>
-                                <p><strong>Type:</strong> {$car['type_name']}</p>
-                                <p><strong>Mileage:</strong> " . number_format($car['mileage']) . " km</p>
-                            </div>
-                            <div class='car-info-right' style='text-align: right;'>
-                                <div style='font-size: 22px; font-weight: bold; color: #0a9396; background-color: #e0f7f6; padding: 8px 14px; border-radius: 10px; margin-bottom: 10px; display: inline-block;'>
-                                    {$car['price_per_day']} <span style='font-size: 14px; font-weight: normal; color: #555;'>BGN/day</span>
-                                </div><br><br>";
+// Call the modified stored procedure with the car_status_id
+$query = "CALL GetAllCars(?)";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $car_status_id); // Bind the car_status_id parameter
+$stmt->execute();
+$result = $stmt->get_result();
 
-                    
-                    if (isset($_SESSION['user_id'])) {
-                        echo "<a href='rent.php?car_id={$car['car_id']}' class='rent-button'>Rent</a>";
-                    } else {
-                        echo "<a href='login.php' class='rent-button'>Login to Rent</a>";
-                    }
+if ($result && $result->num_rows > 0) {
+    while ($car = $result->fetch_assoc()) {
+        echo "<div class='car'>
+    <div class='car-image-wrapper'>
+        <img src='{$car['image_url']}' alt='{$car['brand_name']} {$car['model_name']}'>
+    </div>
+    <div class='car-content'>
+        <h3>{$car['brand_name']} {$car['model_name']}</h3>
+        <p><strong>Gearbox:</strong> {$car['gearbox_name']}</p>
+        <p><strong>Year:</strong> {$car['year_manufacture']}</p>
+        <p><strong>Type:</strong> {$car['type_name']}</p>
+        <p><strong>Mileage:</strong> " . number_format($car['mileage']) . " km</p>
 
-                    echo "</div>
-                        </div>
-                    </div>";
-                }
-                
-                $conn->next_result();
-            } else {
-                echo "<p class='no-more-cars'>There are no cars in the catalog at this moment.</p>";
-            }
-            ?>
+        <div class='car-price'>
+            {$car['price_per_day']} <span>BGN/day</span>
+        </div>";
+
+        if (isset($_SESSION['user_id'])) {
+            echo "<a href='rent.php?car_id={$car['car_id']}' class='rent-button'>Rent</a>";
+        } else {
+            echo "<a href='login.php' class='rent-button'>Login to Rent</a>";
+        }
+
+    echo "</div>
+</div>";
+    }
+} else {
+    echo "<p class='no-more-cars'>There are no cars in the catalog at this moment.</p>";
+}
+
+$stmt->close();
+?>
         </div>
     </div>
 </section>
@@ -210,60 +225,91 @@ document.getElementById('clear-filters').addEventListener('blur', function() {
 }
 
 .car {
-    background: white;
-    border-radius: 12px;
+    background: #fff;
+    border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
     display: flex;
     flex-direction: column;
-    height: 100%;
-    text-align: left;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .car:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-8px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
 }
 
-.car img {
+.car-top {
+    background: url('/path/to/your/gold_background.png') center/cover no-repeat;
+    padding: 20px;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.car-top img {
     width: 100%;
     height: 180px;
     object-fit: cover;
-    border-top-left-radius: 10px;
-    border-top-right-radius: 10px;
-    display: block;
+    border-radius: 12px;
 }
 
-.car h3 {
-    font-size: 20px;
-    margin: 15px 0 5px;
+.car-content {
+    padding: 20px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.car-content h3 {
+    font-size: 22px;
+    margin: 0 0 10px;
     color: #222;
+    font-weight: 700;
 }
 
-.car p {
+.car-content p {
     font-size: 15px;
-    color: #222;
+    color: #555;
     margin: 4px 0;
 }
 
-.car p strong {
-    color: #222;
+.car-content p strong {
+    color: #333;
+}
+
+.car-price {
+    font-size: 24px;
     font-weight: bold;
+    color: #008080;
+    background-color: #e0f7f6;
+    padding: 10px;
+    border-radius: 12px;
+    margin: 12px 0;
+    text-align: center;
+}
+
+.car-price span {
+    font-size: 14px;
+    font-weight: normal;
 }
 
 .rent-button {
     display: inline-block;
+    margin-top: auto;
     background-color: #f7b500;
     color: white;
     font-weight: bold;
-    font-size: 15px;
-    padding: 10px 20px;
+    font-size: 16px;
+    padding: 12px 20px;
     border: none;
     border-radius: 8px;
+    text-align: center;
     text-decoration: none;
-    transition: 0.3s ease;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background 0.3s ease, transform 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
 }
 
 .rent-button:hover {

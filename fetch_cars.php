@@ -1,4 +1,5 @@
 <?php
+session_start();
 include 'includes/db_connect.php';
 
 $brand_id = $_POST['brand_id'] ?: NULL;
@@ -9,21 +10,27 @@ $year_from = $_POST['year_from'] ?: NULL;
 $year_to = $_POST['year_to'] ?: NULL;
 $mileage_max = $_POST['mileage_max'] ?: NULL;
 $price_max = $_POST['price_max'] ?: NULL;
+$car_status_id = $_POST['car_status_id'] ?: NULL;
 
-$stmt = $conn->prepare("CALL FilterCars(?, ?, ?, ?, ?, ?, ?, ?)");
-$stmt->bind_param(
-    "iiiiiiid",
-    $brand_id,
-    $model_id,
-    $gearbox_id,
-    $type_id,
-    $year_from,
-    $year_to,
-    $mileage_max,
-    $price_max
-);
+$stmt = $conn->prepare("CALL FilterCars(?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+if ($stmt === false) {
+    die('MySQL prepare error: ' . $conn->error);
+}
+
+$stmt->bind_param("iiiiiiidd", $brand_id, $model_id, $gearbox_id, $type_id, $year_from, $year_to, $mileage_max, $price_max, $car_status_id);
+
 $stmt->execute();
+
+if ($stmt->error) {
+    die('Execute error: ' . $stmt->error);
+}
+
 $result = $stmt->get_result();
+
+if ($result === false) {
+    die('MySQL query failed: ' . $stmt->error);
+}
 
 $cars_found = false;
 $html = "<div class='cars-grid'>";
@@ -31,22 +38,26 @@ $html = "<div class='cars-grid'>";
 while ($car = $result->fetch_assoc()) {
     $cars_found = true;
     $html .= "<div class='car'>
-        <img src='{$car['image_url']}' alt='{$car['brand_name']} {$car['model_name']}'>
-        <div class='car-content' style='display: flex; justify-content: space-between; align-items: center; padding: 15px;'>
-            <div class='car-info-left'>
-                <h3>{$car['brand_name']} {$car['model_name']}</h3>
-                <p><strong>Gearbox:</strong> {$car['gearbox_name']}</p>
-                <p><strong>Year:</strong> {$car['year_manufacture']}</p>
-                <p><strong>Type:</strong> {$car['type_name']}</p>
-                <p><strong>Mileage:</strong> " . number_format($car['mileage']) . " km</p>
-            </div>
-            <div class='car-info-right' style='text-align: right;'>
-                <div style='font-size: 22px; font-weight: bold; color: #0a9396; background-color: #e0f7f6; padding: 8px 14px; border-radius: 10px; margin-bottom: 10px; display: inline-block;'>
-                    {$car['price_per_day']} <span style='font-size: 14px; font-weight: normal; color: #555;'>BGN/day</span>
-                </div><br><br>
-                <a href='rent.php?car_id={$car['car_id']}' class='rent-button'>Rent</a>
-            </div>
+        <div class='car-top'>
+            <img src='{$car['image_url']}' alt='{$car['brand_name']} {$car['model_name']}'>
         </div>
+        <div class='car-content'>
+            <h3>{$car['brand_name']} {$car['model_name']}</h3>
+            <p><strong>Gearbox:</strong> {$car['gearbox_name']}</p>
+            <p><strong>Year:</strong> {$car['year_manufacture']}</p>
+            <p><strong>Type:</strong> {$car['type_name']}</p>
+            <p><strong>Mileage:</strong> " . number_format($car['mileage']) . " km</p>
+            <div class='car-price'>
+                {$car['price_per_day']} <span>BGN/day</span>
+            </div>";
+
+    if (isset($_SESSION['user_id'])) {
+        $html .= "<a href='rent.php?car_id={$car['car_id']}' class='rent-button'>Rent</a>";
+    } else {
+        $html .= "<a href='login.php' class='rent-button'>Login to Rent</a>";
+    }
+
+    $html .= "</div>
     </div>";
 }
 

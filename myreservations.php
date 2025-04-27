@@ -1,5 +1,5 @@
 <?php
-
+date_default_timezone_set('Europe/Sofia');
 include 'includes/header.php';
 include 'includes/db_connect.php';
 
@@ -12,29 +12,40 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $now = date('Y-m-d H:i:s');
 
-$update_active_sql = "
+
+$update_returned_sql = "
     UPDATE rentals 
     SET rental_status_id = 4 
-    WHERE rental_status_id != 4 
-      AND user_id = ? 
-      AND CONCAT(rental_date, ' ', pickup_time) <= ? 
-      AND CONCAT(return_date, ' ', dropoff_time) >= ?
+    WHERE user_id = ?
+      AND rental_status_id NOT IN (3, 4)
+      AND CONCAT(return_date, ' ', dropoff_time) < ?;
 ";
+$returned_stmt = $conn->prepare($update_returned_sql);
+$returned_stmt->bind_param("is", $user_id, $now);
+$returned_stmt->execute();
+$returned_stmt->close();
 
-$update_stmt = $conn->prepare($update_active_sql);
-$update_stmt->bind_param("iss", $user_id, $now, $now);
-$update_stmt->execute();
-$update_stmt->close();
+
+$update_active_sql = "
+    UPDATE rentals 
+    SET rental_status_id = 1 
+    WHERE user_id = ?
+      AND rental_status_id NOT IN (1, 3, 4)
+      AND CONCAT(rental_date, ' ', pickup_time) <= ?
+      AND CONCAT(return_date, ' ', dropoff_time) >= ?;
+";
+$active_stmt = $conn->prepare($update_active_sql);
+$active_stmt->bind_param("iss", $user_id, $now, $now);
+$active_stmt->execute();
+$active_stmt->close();
 
 $status_id = isset($_GET['status_id']) ? $_GET['status_id'] : '';
 $date_from = isset($_GET['date_from']) ? $_GET['date_from'] : '';
 $date_to   = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 
-
 $status_id = $status_id !== '' ? $status_id : null;
 $date_from = $date_from !== '' ? $date_from : null;
-$date_to   = $date_to !== '' ? $date_to : '';
-
+$date_to   = $date_to !== '' ? $date_to : null;
 
 $query = "SELECT 
             r.rental_id, 
@@ -68,7 +79,6 @@ if ($date_to) {
 $query .= " ORDER BY r.rental_date DESC, r.pickup_time DESC";
 
 $stmt = $conn->prepare($query);
-
 
 $types = "i";
 $params = [$user_id];
@@ -117,48 +127,40 @@ $reservations = $stmt->get_result();
         </form>
 
         <div class="cars-grid">
-            <?php
+<?php
 if ($reservations && $reservations->num_rows > 0) {
     while ($row = $reservations->fetch_assoc()) {
         $pickup = $row['rental_date'] . ' ' . $row['pickup_time'];
         $dropoff = $row['return_date'] . ' ' . $row['dropoff_time'];
-        
-        $current_time = new DateTime();
-        $pickup_time = new DateTime($pickup);
-
-        
-        $can_cancel = $pickup_time > $current_time;
 
         echo "<div class='car'>";
-echo "<img src='{$row['image_url']}' alt='{$row['brand_name']} {$row['model_name']}'>";
-echo "<div class='car-content' style='padding: 15px;'>";
-echo "<h3>{$row['brand_name']} {$row['model_name']}</h3>";
-//echo "<p><strong>Status:</strong> {$row['rental_status_name']}</p>";
-echo "<p><strong>Pickup:</strong> " . date('Y-m-d H:i', strtotime($pickup)) . "</p>";
-echo "<p><strong>Dropoff:</strong> " . date('Y-m-d H:i', strtotime($dropoff)) . "</p>";
-echo "<p><strong>Total Price:</strong> {$row['total_price']} BGN</p>";
+        echo "<img src='{$row['image_url']}' alt='{$row['brand_name']} {$row['model_name']}'>";
+        echo "<div class='car-content'>";
+        echo "<h3>{$row['brand_name']} {$row['model_name']}</h3>";
+        echo "<p><strong>Status:</strong> {$row['rental_status_name']}</p>";
+        echo "<p><strong>Pickup:</strong> " . date('Y-m-d H:i', strtotime($pickup)) . "</p>";
+        echo "<p><strong>Dropoff:</strong> " . date('Y-m-d H:i', strtotime($dropoff)) . "</p>";
+        echo "<p><strong>Total Price:</strong> {$row['total_price']} BGN</p>";
 
-if ($row['rental_status_id'] == 3) {
-    echo "<p class='status-cancelled'>This rent is already cancelled</p>";
-}
+        if ($row['rental_status_id'] == 2) {
+            
+            echo "<form action='cancel_reservation.php' method='POST'>
+                    <input type='hidden' name='rental_id' value='{$row['rental_id']}'>
+                    <button type='submit' class='rent-button'>Cancel Reservation</button>
+                  </form>";
+        } elseif ($row['rental_status_id'] == 1) {
+            echo "<p class='status-active'>Currently Active</p>";
+        } elseif ($row['rental_status_id'] == 3) {
+            echo "<p class='status-cancelled'>Reservation Cancelled</p>";
+        } elseif ($row['rental_status_id'] == 4) {
+            echo "<p class='status-completed'>Rental Completed and Returned</p>";
+        }
 
-
-if ($can_cancel && $row['rental_status_id'] != 3) {
-    echo "<form action='cancel_reservation.php' method='POST'>
-            <input type='hidden' name='rental_id' value='{$row['rental_id']}'>
-            <button type='submit' class='rent-button'>Cancel Reservation</button>
-          </form>";
-} elseif ($row['rental_status_id'] == 2) {
-    
-    echo "<p class='status-active'>Cancellation is not allowed for this rental.</p>";
-}
-
-echo "</div></div>";
+        echo "</div></div>";
     }
 } else {
     echo "<p class='no-more-cars'>No reservations found.</p>";
 }
-
 $stmt->close();
 ?>
         </div>
@@ -168,7 +170,7 @@ $stmt->close();
 <?php include 'includes/footer.php'; ?>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function () {
     flatpickr("#date_from", {
         enableTime: false,
         dateFormat: "Y-m-d",
